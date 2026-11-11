@@ -1,92 +1,118 @@
 #import <UIKit/UIKit.h>
 
-// Lightweight visual-only overlay.
-// No Telegram private APIs, networking, authentication, or message storage.
+// Lightweight visual-only controls attached to Telegram's existing window.
+// This tweak does not create or replace application windows and does not
+// access Telegram private APIs, networking, authentication, or message data.
 
-@interface TLVOverlayWindow : UIWindow
-@end
-
-@implementation TLVOverlayWindow
-- (BOOL)canBecomeKeyWindow { return NO; }
-
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    UIView *hit = [super hitTest:point withEvent:event];
-    // Let Telegram receive touches everywhere except our visible controls.
-    if (hit == self.rootViewController.view) return nil;
-    return hit;
-}
-@end
-
-@interface TLVOverlayController : UIViewController
+@interface TLVOverlay : NSObject
+@property(nonatomic, weak) UIWindow *hostWindow;
 @property(nonatomic, strong) UIButton *launcherButton;
-@property(nonatomic, strong) UIView *shadeView;
-@property(nonatomic, strong) UIVisualEffectView *card;
+@property(nonatomic, strong) UIView *panelView;
++ (instancetype)shared;
+- (void)installIfReady;
 @end
 
-@implementation TLVOverlayController
+@implementation TLVOverlay
 
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    self.view.backgroundColor = UIColor.clearColor;
++ (instancetype)shared {
+    static TLVOverlay *instance;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        instance = [TLVOverlay new];
+    });
+    return instance;
+}
 
-    self.launcherButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    self.launcherButton.translatesAutoresizingMaskIntoConstraints = NO;
-    self.launcherButton.backgroundColor = [UIColor colorWithRed:0.48 green:0.35 blue:1 alpha:0.96];
-    self.launcherButton.layer.cornerRadius = 27;
-    self.launcherButton.layer.masksToBounds = YES;
-    [self.launcherButton setTitle:@"✦" forState:UIControlStateNormal];
-    [self.launcherButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-    self.launcherButton.titleLabel.font = [UIFont systemFontOfSize:24 weight:UIFontWeightBold];
-    [self.launcherButton addTarget:self action:@selector(showPanel) forControlEvents:UIControlEventTouchUpInside];
-    [self.view addSubview:self.launcherButton];
+- (UIWindow *)activeKeyWindow {
+    UIApplication *application = UIApplication.sharedApplication;
+    if (@available(iOS 13.0, *)) {
+        for (UIScene *scene in application.connectedScenes) {
+            if (![scene isKindOfClass:[UIWindowScene class]] ||
+                scene.activationState != UISceneActivationStateForegroundActive) continue;
+            for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+                if (window.isKeyWindow && !window.hidden && window.rootViewController) return window;
+            }
+        }
+    }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    UIWindow *legacyWindow = application.keyWindow;
+#pragma clang diagnostic pop
+    return (legacyWindow && !legacyWindow.hidden) ? legacyWindow : nil;
+}
 
+- (void)installIfReady {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self installIfReady]; });
+        return;
+    }
+
+    UIWindow *window = [self activeKeyWindow];
+    if (!window) return;
+    if (self.launcherButton && self.hostWindow == window &&
+        self.launcherButton.superview == window) return;
+
+    [self.panelView removeFromSuperview];
+    [self.launcherButton removeFromSuperview];
+    self.panelView = nil;
+    self.launcherButton = nil;
+    self.hostWindow = window;
+
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+    button.translatesAutoresizingMaskIntoConstraints = NO;
+    button.backgroundColor = [UIColor colorWithRed:0.48 green:0.35 blue:1 alpha:0.96];
+    button.layer.cornerRadius = 26;
+    button.layer.masksToBounds = YES;
+    [button setTitle:@"✦" forState:UIControlStateNormal];
+    [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+    button.titleLabel.font = [UIFont systemFontOfSize:23 weight:UIFontWeightBold];
+    [button addTarget:self action:@selector(showPanel) forControlEvents:UIControlEventTouchUpInside];
+    [window addSubview:button];
     [NSLayoutConstraint activateConstraints:@[
-        [self.launcherButton.widthAnchor constraintEqualToConstant:54],
-        [self.launcherButton.heightAnchor constraintEqualToConstant:54],
-        [self.launcherButton.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16],
-        [self.launcherButton.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-110]
+        [button.widthAnchor constraintEqualToConstant:52],
+        [button.heightAnchor constraintEqualToConstant:52],
+        [button.trailingAnchor constraintEqualToAnchor:window.trailingAnchor constant:-15],
+        [button.bottomAnchor constraintEqualToAnchor:window.safeAreaLayoutGuide.bottomAnchor constant:-105]
     ]];
+    self.launcherButton = button;
 }
 
 - (void)showPanel {
-    if (self.shadeView) return;
+    if (self.panelView || !self.hostWindow) return;
 
     UIView *shade = [[UIView alloc] init];
     shade.translatesAutoresizingMaskIntoConstraints = NO;
-    shade.backgroundColor = [UIColor colorWithWhite:0 alpha:0.38];
-    self.shadeView = shade;
-    [self.view addSubview:shade];
-
+    shade.backgroundColor = [UIColor colorWithWhite:0 alpha:0.42];
+    shade.accessibilityViewIsModal = YES;
+    [self.hostWindow addSubview:shade];
     [NSLayoutConstraint activateConstraints:@[
-        [shade.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [shade.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [shade.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-        [shade.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
+        [shade.leadingAnchor constraintEqualToAnchor:self.hostWindow.leadingAnchor],
+        [shade.trailingAnchor constraintEqualToAnchor:self.hostWindow.trailingAnchor],
+        [shade.topAnchor constraintEqualToAnchor:self.hostWindow.topAnchor],
+        [shade.bottomAnchor constraintEqualToAnchor:self.hostWindow.bottomAnchor]
     ]];
+    self.panelView = shade;
 
     UIBlurEffect *blur = [UIBlurEffect effectWithStyle:UIBlurEffectStyleDark];
     UIVisualEffectView *card = [[UIVisualEffectView alloc] initWithEffect:blur];
     card.translatesAutoresizingMaskIntoConstraints = NO;
-    card.layer.cornerRadius = 22;
+    card.layer.cornerRadius = 21;
     card.layer.masksToBounds = YES;
-    self.card = card;
     [shade addSubview:card];
-
     [NSLayoutConstraint activateConstraints:@[
         [card.centerXAnchor constraintEqualToAnchor:shade.centerXAnchor],
         [card.centerYAnchor constraintEqualToAnchor:shade.centerYAnchor],
         [card.widthAnchor constraintEqualToConstant:300],
-        [card.heightAnchor constraintEqualToConstant:350],
-        [card.leadingAnchor constraintGreaterThanOrEqualToAnchor:shade.leadingAnchor constant:10],
-        [card.trailingAnchor constraintLessThanOrEqualToAnchor:shade.trailingAnchor constant:-10]
+        [card.heightAnchor constraintEqualToConstant:340],
+        [card.leadingAnchor constraintGreaterThanOrEqualToAnchor:shade.leadingAnchor constant:12],
+        [card.trailingAnchor constraintLessThanOrEqualToAnchor:shade.trailingAnchor constant:-12]
     ]];
 
     UIStackView *stack = [[UIStackView alloc] init];
     stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = 14;
+    stack.spacing = 13;
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     [card.contentView addSubview:stack];
-
     [NSLayoutConstraint activateConstraints:@[
         [stack.topAnchor constraintEqualToAnchor:card.contentView.topAnchor constant:22],
         [stack.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor constant:20],
@@ -97,7 +123,7 @@
     UILabel *title = [[UILabel alloc] init];
     title.text = @"TELATGER  ✦";
     title.textColor = UIColor.whiteColor;
-    title.font = [UIFont systemFontOfSize:22 weight:UIFontWeightBold];
+    title.font = [UIFont systemFontOfSize:21 weight:UIFontWeightBold];
     [stack addArrangedSubview:title];
 
     UILabel *subtitle = [[UILabel alloc] init];
@@ -112,11 +138,9 @@
         label.text = name;
         label.textColor = UIColor.whiteColor;
         label.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
-
         UISwitch *toggle = [[UISwitch alloc] init];
         toggle.onTintColor = [UIColor colorWithRed:0.48 green:0.35 blue:1 alpha:1];
         toggle.on = YES;
-
         UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[label, toggle]];
         row.axis = UILayoutConstraintAxisHorizontal;
         row.alignment = UIStackViewAlignmentCenter;
@@ -125,85 +149,40 @@
     }
 
     UIButton *close = [UIButton buttonWithType:UIButtonTypeSystem];
-    close.translatesAutoresizingMaskIntoConstraints = NO;
     [close setTitle:@"Close" forState:UIControlStateNormal];
     [close setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
     close.backgroundColor = [UIColor colorWithRed:0.48 green:0.35 blue:1 alpha:1];
     close.layer.cornerRadius = 12;
-    close.contentEdgeInsets = UIEdgeInsetsMake(11, 18, 11, 18);
+    close.contentEdgeInsets = UIEdgeInsetsMake(10, 18, 10, 18);
     [close addTarget:self action:@selector(closePanel) forControlEvents:UIControlEventTouchUpInside];
     [stack addArrangedSubview:close];
 }
 
 - (void)closePanel {
-    [self.shadeView removeFromSuperview];
-    self.shadeView = nil;
-    self.card = nil;
+    [self.panelView removeFromSuperview];
+    self.panelView = nil;
 }
 
-@end
-
-@interface TLVLauncher : NSObject
-@property(nonatomic, strong) TLVOverlayWindow *window;
-+ (instancetype)shared;
-- (void)installIfReady;
-@end
-
-@implementation TLVLauncher
-
-+ (instancetype)shared {
-    static TLVLauncher *instance;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        instance = [TLVLauncher new];
-    });
-    return instance;
-}
-
-- (void)installIfReady {
-    if (self.window) return;
-
-    UIWindowScene *activeScene = nil;
-    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
-        if ([scene isKindOfClass:[UIWindowScene class]] &&
-            scene.activationState == UISceneActivationStateForegroundActive) {
-            activeScene = (UIWindowScene *)scene;
-            break;
-        }
-    }
-    if (!activeScene) return;
-
-    TLVOverlayWindow *overlay = [[TLVOverlayWindow alloc] initWithWindowScene:activeScene];
-    overlay.frame = activeScene.coordinateSpace.bounds;
-    overlay.windowLevel = UIWindowLevelNormal + 1;
-    overlay.backgroundColor = UIColor.clearColor;
-    overlay.rootViewController = [TLVOverlayController new];
-    overlay.hidden = NO;
-    self.window = overlay;
-}
-
-- (void)applicationBecameActive:(NSNotification *)notification {
-    if (self.window) return;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
+- (void)applicationDidBecomeActive:(NSNotification *)note {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [self installIfReady];
     });
 }
-
 @end
 
 %ctor {
     @autoreleasepool {
-        // One delayed install after launch; no retry loop and no launch-time UI work.
+        // Defer UIKit access until the main run loop is available.
         dispatch_async(dispatch_get_main_queue(), ^{
-            TLVLauncher *launcher = [TLVLauncher shared];
-            [[NSNotificationCenter defaultCenter] addObserver:launcher
-                                                     selector:@selector(applicationBecameActive:)
+            TLVOverlay *overlay = [TLVOverlay shared];
+            [[NSNotificationCenter defaultCenter] addObserver:overlay
+                                                     selector:@selector(applicationDidBecomeActive:)
                                                          name:UIApplicationDidBecomeActiveNotification
                                                        object:nil];
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8 * NSEC_PER_SEC)),
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
-                [launcher installIfReady];
+                [overlay installIfReady];
             });
         });
     }
