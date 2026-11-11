@@ -1,0 +1,8 @@
+Package: com.soroka.telatgervisuals
+Name: Telatger Visuals
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: Visual-only Telegram interface customization overlay.
+Maintainer: soroka1723
+Author: soroka1723
+Section: Tweaks
