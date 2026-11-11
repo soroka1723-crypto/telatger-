@@ -1,0 +1,42 @@
+name: Build Telatger Visuals
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Tweak.xm'
+      - 'Makefile'
+      - 'control'
+      - '.github/workflows/build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Theos and iOS SDK
+        uses: Randomblock1/theos-action@v1
+
+      - name: Compile tweak
+        run: |
+          set -euo pipefail
+          make clean package FINALPACKAGE=1
+          mkdir -p build-output
+          find .theos packages -type f \\( -name '*.dylib' -o -name '*.deb' \\) -print -exec cp {} build-output/ \\;
+          test -n "$(find build-output -type f -name '*.dylib' -print -quit)"
+          echo "Build files:"
+          ls -lh build-output
+
+      - name: Upload compiled files
+        uses: actions/upload-artifact@v4
+        with:
+          name: TelatgerVisuals-iOS
+          path: build-output/*
+          if-no-files-found: error
+          retention-days: 14
