@@ -8,6 +8,7 @@ on:
       - 'Tweak.xm'
       - 'Makefile'
       - 'control'
+      - 'TelatgerVisuals.plist'
       - '.github/workflows/build.yml'
 
 permissions:
