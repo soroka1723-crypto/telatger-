@@ -29,7 +29,8 @@ jobs:
           set -euo pipefail
           make clean package FINALPACKAGE=1
           mkdir -p build-output
-          find .theos packages -type f \\( -name '*.dylib' -o -name '*.deb' \\) -print -exec cp {} build-output/ \\;
+          find .theos packages -type f -name '*.dylib' -print -exec cp {} build-output/ \\
+          find packages -type f -name '*.deb' -print -exec cp {} build-output/ \\;
           test -n "$(find build-output -type f -name '*.dylib' -print -quit)"
           echo "Build files:"
           ls -lh build-output
