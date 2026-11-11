@@ -102,7 +102,7 @@
     [self.button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
     self.button.titleLabel.font = [UIFont systemFontOfSize:25 weight:UIFontWeightBold];
     [self.button addTarget:self action:@selector(show) forControlEvents:UIControlEventTouchUpInside];
-    [self.window addSubview:self.button];
+    [self.window.rootViewController.view addSubview:self.button];
     self.window.hidden = NO;
     self.window.frame = CGRectMake(UIScreen.mainScreen.bounds.size.width - 72, UIScreen.mainScreen.bounds.size.height * 0.55, 58, 58);
 }
