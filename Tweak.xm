@@ -65,9 +65,12 @@
     UIButton *close = [UIButton buttonWithType:UIButtonTypeSystem];
     [close setTitle:@"Close" forState:UIControlStateNormal];
     [close setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-    close.backgroundColor = [UIColor colorWithRed:0.48 green:0.35 blue:1 alpha:1];
+    UIButtonConfiguration *closeConfig = [UIButtonConfiguration filledButtonConfiguration];
+    closeConfig.baseBackgroundColor = [UIColor colorWithRed:0.48 green:0.35 blue:1 alpha:1];
+    closeConfig.baseForegroundColor = UIColor.whiteColor;
+    closeConfig.contentInsets = NSDirectionalEdgeInsetsMake(11, 18, 11, 18);
+    close.configuration = closeConfig;
     close.layer.cornerRadius = 13;
-    close.contentEdgeInsets = UIEdgeInsetsMake(11, 18, 11, 18);
     [close addTarget:self action:@selector(closePanel) forControlEvents:UIControlEventTouchUpInside];
     [stack addArrangedSubview:close];
 }
