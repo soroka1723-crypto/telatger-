@@ -120,8 +120,14 @@
 
 %ctor {
     @autoreleasepool {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [[TLVLauncher shared] install];
-        });
+        // Telegram may create its first active UIWindowScene after the dylib loads.
+        // Retry briefly so the launcher appears once the app UI is ready.
+        for (NSInteger attempt = 0; attempt < 12; attempt++) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                (int64_t)((2 + attempt) * NSEC_PER_SEC)),
+                dispatch_get_main_queue(), ^{
+                    [[TLVLauncher shared] install];
+                });
+        }
     }
 }
